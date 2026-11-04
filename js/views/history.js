@@ -96,7 +96,8 @@ function renderDetail(id, navigate) {
     h('div', { class: 'stat-grid' },
       h('div', { class: 'stat' }, h('div', { class: 'v' }, String(setsOf(session))), h('div', { class: 'k' }, 'séries')),
       h('div', { class: 'stat' }, h('div', { class: 'v' }, `${fmtNum(volumeOf(session), 0)} kg`), h('div', { class: 'k' }, 'volume total')),
-      minutes ? h('div', { class: 'stat' }, h('div', { class: 'v' }, `${minutes} min`), h('div', { class: 'k' }, 'duração')) : null));
+      minutes ? h('div', { class: 'stat' }, h('div', { class: 'v' }, `${minutes} min`), h('div', { class: 'k' }, 'duração')) : null,
+      session.effort ? h('div', { class: 'stat' }, h('div', { class: 'v' }, `${session.effort}/10`), h('div', { class: 'k' }, 'esforço')) : null));
 
   const records = findRecords(session, all);
   if (records.length) {

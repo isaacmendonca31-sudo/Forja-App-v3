@@ -43,6 +43,11 @@ function draftProgress(draft) {
   return { total: all.length, done: all.filter((s) => s.done).length };
 }
 
+/** Saudação por horário (sem nome nem dados pessoais). */
+export function greeting(hour = new Date().getHours()) {
+  return hour < 5 ? 'Boa madrugada' : hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+}
+
 export function render({ rerender }) {
   const plan = getPlan();
   const sessions = getSessions();
@@ -53,7 +58,7 @@ export function render({ rerender }) {
   const todayDay = plan.days.find((d) => d.weekday === dow);
 
   const root = h('div', { class: 'view' },
-    pageHead('Treino', { subtitle: fmtDateLong(todayISO) }));
+    pageHead('Treino', { subtitle: `${greeting()} · ${fmtDateLong(todayISO)}` }));
 
   // ───── 1. Treino em andamento ─────
   if (draft) {

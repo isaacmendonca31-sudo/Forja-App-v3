@@ -10,7 +10,34 @@
  */
 import { getSettings } from './store.js';
 
-export const motionOK = () => !globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const osReduced = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/** Intensidade efetiva: o pedido do sistema operacional sempre vence a preferência do app. */
+export function motionLevel() {
+  if (osReduced()) return 'reduced';
+  try { return getSettings().motion ?? 'normal'; } catch { return 'normal'; }
+}
+export const motionOK = () => motionLevel() !== 'reduced';
+
+/**
+ * Aplica as preferências de movimento ao <body>:
+ *  data-motion = reduced | normal | intense   (CSS ajusta durações e efeitos)
+ *  data-perf   = low  em aparelhos modestos (pouca memória/CPU) → sem desfoque pesado
+ * Também pausa animações decorativas quando a aba fica oculta (economiza bateria).
+ */
+export function applyMotionPrefs() {
+  const body = document.body;
+  body.dataset.motion = motionLevel();
+  const mem = navigator.deviceMemory;
+  const cores = navigator.hardwareConcurrency;
+  const low = (mem && mem <= 2) || (cores && cores <= 2);
+  if (low) body.dataset.perf = 'low'; else delete body.dataset.perf;
+  body.classList.toggle('tab-hidden', document.hidden);
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => document.body.classList.toggle('tab-hidden', document.hidden));
+  globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').addEventListener?.('change', () => applyMotionPrefs());
+}
 
 const PATTERNS = {
   tap: 10,

@@ -118,6 +118,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   keepAwake: true,
   vibrate: true,
   sound: false,
+  motion: 'normal',     // 'reduced' | 'normal' | 'intense' (intensidade das animações)
+  rankEffects: true,    // efeitos de celebração por rank no resumo
+  autoRest: true,       // inicia o descanso sozinho ao concluir uma série
   unavailableEquipment: [],
   updatedAt: 0,
 });
@@ -130,6 +133,9 @@ export function sanitizeSettings(raw) {
     keepAwake: typeof r.keepAwake === 'boolean' ? r.keepAwake : DEFAULT_SETTINGS.keepAwake,
     vibrate: typeof r.vibrate === 'boolean' ? r.vibrate : DEFAULT_SETTINGS.vibrate,
     sound: typeof r.sound === 'boolean' ? r.sound : DEFAULT_SETTINGS.sound,
+    motion: ['reduced', 'normal', 'intense'].includes(r.motion) ? r.motion : DEFAULT_SETTINGS.motion,
+    rankEffects: typeof r.rankEffects === 'boolean' ? r.rankEffects : DEFAULT_SETTINGS.rankEffects,
+    autoRest: typeof r.autoRest === 'boolean' ? r.autoRest : DEFAULT_SETTINGS.autoRest,
     unavailableEquipment: [...new Set(asArray(r.unavailableEquipment).filter((k) => typeof k === 'string' && has(EQUIPMENT, k)))],
     updatedAt: timestamp(r.updatedAt),
   };
@@ -173,6 +179,8 @@ export function sanitizeSession(raw) {
     items,
     updatedAt: timestamp(raw.updatedAt),
   };
+  const effort = intIn(raw.effort, 1, 10); // esforço percebido (RPE), opcional
+  if (effort !== null) out.effort = effort;
   const d = timestamp(raw.deletedAt);
   if (d) out.deletedAt = d;
   return out;
@@ -262,6 +270,7 @@ export function sanitizeDraft(raw) {
         repMax: intIn(p.repMax, 1, 100) ?? 100,
       },
       planNote: cleanText(it.planNote, 120),
+      swapNote: cleanText(it.swapNote, 80),
       note: cleanText(it.note, LIMITS.note, { multiline: true }),
       skipped: it.skipped === true,
       doneAt: timestamp(it.doneAt),
@@ -275,6 +284,8 @@ export function sanitizeDraft(raw) {
     title: cleanText(raw.title, LIMITS.name) || 'Treino',
     date: raw.date,
     startedAt: timestamp(raw.startedAt),
+    pausedMs: intIn(raw.pausedMs, 0, 86_400_000) ?? 0, // tempo total em pausa
+    pausedAt: timestamp(raw.pausedAt),                 // != 0 → treino pausado desde este instante
     note: cleanText(raw.note, LIMITS.note, { multiline: true }),
     items,
   };

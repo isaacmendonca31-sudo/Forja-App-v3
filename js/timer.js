@@ -6,15 +6,18 @@
  * correto ao voltar. Ao terminar: vibração e/ou bipe (conforme Ajustes) e aviso
  * visual + leitor de tela.
  */
-import { h, fmtClock, icon } from './utils.js';
+import { h, fmtClock, icon, svgEl } from './utils.js';
 import { getSettings } from './store.js';
 import { haptic, motionOK } from './feedback.js';
 
+const R = 26; // raio do anel (viewBox 64)
+const CIRC = 2 * Math.PI * R;
+const PRESETS = [60, 90, 120, 180];
+
 let root = null;
-let clockEl; let labelEl; let announceEl; let doneBtn;
+let clockEl; let labelEl; let announceEl; let doneBtn; let ringFg; let presetBox;
 let endAt = 0;
 let totalMs = 0;
-let meterFill;
 let interval = null;
 let finished = false;
 let audioCtx = null;
@@ -26,17 +29,29 @@ export function initTimer(container) {
   // Região "viva" só anuncia o FIM do descanso (não a cada segundo).
   announceEl = h('span', { class: 'sr-only', role: 'status', 'aria-live': 'polite' });
   doneBtn = h('button', { type: 'button', class: 'btn ghost small', onClick: stopRest }, 'Pular');
-  meterFill = h('span');
+  ringFg = svgEl('circle', { class: 'ring-fg', cx: 32, cy: 32, r: R, fill: 'none', 'stroke-width': 6, 'stroke-linecap': 'round', transform: 'rotate(-90 32 32)' });
+  ringFg.style.strokeDasharray = String(CIRC);
+  const ring = svgEl('svg', { class: 'ring', viewBox: '0 0 64 64', 'aria-hidden': 'true', focusable: 'false' },
+    svgEl('circle', { class: 'ring-bg', cx: 32, cy: 32, r: R, fill: 'none', 'stroke-width': 6 }), ringFg);
+  presetBox = h('div', { class: 'presets', role: 'group', 'aria-label': 'Tempo de descanso' },
+    ...PRESETS.map((sec) => h('button', {
+      type: 'button', class: 'chip', 'aria-label': `Descansar ${fmtClock(sec)}`,
+      onClick: () => { startRest(sec, labelEl.textContent === 'Descanso concluído' ? 'Descanso' : labelEl.textContent); haptic('tap'); },
+    }, fmtClock(sec))));
   root.append(
-    icon('timer'),
-    clockEl,
-    labelEl,
-    h('button', { type: 'button', class: 'btn ghost small', 'aria-label': 'Menos 15 segundos', onClick: () => adjust(-15) }, '−15'),
-    h('button', { type: 'button', class: 'btn ghost small', 'aria-label': 'Mais 15 segundos', onClick: () => adjust(15) }, '+15'),
-    doneBtn,
+    h('div', { class: 'ring-wrap' }, ring, clockEl),
+    h('div', { class: 'timer-mid' }, labelEl, presetBox),
+    h('div', { class: 'timer-actions' },
+      h('button', { type: 'button', class: 'btn ghost small', 'aria-label': 'Menos 15 segundos', onClick: () => adjust(-15) }, '−15'),
+      h('button', { type: 'button', class: 'btn ghost small', 'aria-label': 'Mais 15 segundos', onClick: () => adjust(15) }, '+15'),
+      doneBtn),
     announceEl,
-    h('div', { class: 'meter', 'aria-hidden': 'true' }, meterFill),
   );
+}
+
+function setRing(fraction) {
+  const f = Math.max(0, Math.min(1, fraction));
+  ringFg.style.strokeDashoffset = String(CIRC * (1 - f)); // transição CSS: só stroke-dashoffset
 }
 
 /** Inicia (ou reinicia) o descanso. Deve ser chamado a partir de um toque do usuário. */
@@ -51,6 +66,7 @@ export function startRest(seconds, text = 'Descanso') {
   doneBtn.textContent = 'Pular';
   root.classList.remove('finished');
   root.hidden = false;
+  setRing(1);
   if (motionOK()) {
     root.classList.remove('enter'); void root.offsetWidth; root.classList.add('enter');
   }
@@ -81,20 +97,21 @@ function tick() {
   const left = Math.ceil(leftMs / 1000);
   if (left > 0) {
     clockEl.textContent = fmtClock(left);
-    meterFill.style.setProperty('--pct', `${Math.max(0, Math.min(100, (leftMs / totalMs) * 100)).toFixed(1)}%`);
+    setRing(leftMs / totalMs);
     return;
   }
   if (finished) return;
   finished = true;
   clearInterval(interval);
   clockEl.textContent = '0:00';
-  meterFill.style.setProperty('--pct', '0%');
+  setRing(0);
   labelEl.textContent = 'Descanso concluído';
   announceEl.textContent = 'Descanso concluído';
   doneBtn.textContent = 'Fechar';
   root.classList.add('finished');
   const s = getSettings();
   if (s.vibrate) navigator.vibrate?.([200, 100, 200]);
+  if (motionOK()) { root.classList.remove('done-pulse'); void root.offsetWidth; root.classList.add('done-pulse'); }
   if (s.sound) beep();
 }
 

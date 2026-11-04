@@ -11,7 +11,7 @@ import { initTimer } from './timer.js';
 import { startAutoSync, onSyncChange, getSyncInfo } from './sync.js';
 import { toast } from './ui.js';
 import { h } from './utils.js';
-import { announce, setAmbientRank } from './feedback.js';
+import { announce, setAmbientRank, applyMotionPrefs, motionOK } from './feedback.js';
 import { isId } from './validate.js';
 import { initInstall, installApp, getInstallState, onInstallStateChange } from './install.js';
 
@@ -84,28 +84,49 @@ function match(path) {
 
 const navigate = (path) => { location.hash = `#${path}`; };
 
+const TAB_PATHS = new Set(['/', '/evolucao', '/historico', '/biblioteca', '/ajustes']);
+const NAV_ORDER = ['treino', 'evolucao', 'historico', 'biblioteca', 'ajustes'];
+const scrollMemory = new Map(); // caminho → rolagem (só abas principais)
+let currentPath = null;
+const navEl = document.querySelector('.bottom-nav');
+
 function mount() {
   const path = (location.hash.slice(1) || '/').split('?')[0];
   const found = match(path) || match('/');
+  const samePath = path === currentPath;
+  if (currentPath && TAB_PATHS.has(currentPath)) scrollMemory.set(currentPath, window.scrollY);
 
-  current?.handle?.destroy?.();
-  setAmbientRank(null); // telas que exibem um rank (resumo/histórico) o reativam ao montar
-  const ctx = { params: found.params, navigate, rerender: mount };
-  const handle = found.view.render(ctx);
-  current = { ...found, handle };
+  const swap = () => {
+    current?.handle?.destroy?.();
+    setAmbientRank(null); // telas que exibem um rank (resumo/histórico) o reativam ao montar
+    const ctx = { params: found.params, navigate, rerender: mount };
+    const handle = found.view.render(ctx);
+    current = { ...found, handle };
 
-  main.replaceChildren(handle.el);
-  document.title = `${handle.title} · FORJA`;
-  main.classList.toggle('has-timer', !document.getElementById('rest-timer').hidden);
+    main.replaceChildren(handle.el);
+    document.title = `${handle.title} · FORJA`;
+    main.classList.toggle('has-timer', !document.getElementById('rest-timer').hidden);
 
-  // Navegação: marca a aba ativa (aria-current) para leitores de tela.
-  document.querySelectorAll('.bottom-nav a').forEach((a) => {
-    if (a.dataset.route === found.nav) a.setAttribute('aria-current', 'page');
-    else a.removeAttribute('aria-current');
-  });
+    // Navegação: marca a aba ativa (aria-current) e desliza o indicador.
+    document.querySelectorAll('.bottom-nav a').forEach((a) => {
+      if (a.dataset.route === found.nav) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    });
+    navEl.style.setProperty('--i', String(Math.max(0, NAV_ORDER.indexOf(found.nav))));
 
-  window.scrollTo(0, 0);
-  main.focus({ preventScroll: true }); // leitores de tela começam pelo conteúdo novo
+    // Rolagem: abas principais lembram onde você estava; o resto abre no topo.
+    // Redesenhos na mesma tela (sincronização, modo de teste) não pulam para o topo.
+    const y = samePath || TAB_PATHS.has(path) ? (scrollMemory.get(path) ?? 0) : 0;
+    window.scrollTo(0, samePath ? window.scrollY : y);
+    main.focus({ preventScroll: true }); // leitores de tela começam pelo conteúdo novo
+  };
+
+  currentPath = path;
+  // Transição suave entre telas (fade curto do navegador) só quando existe, há movimento e a rota mudou.
+  if (!samePath && current && typeof document.startViewTransition === 'function' && motionOK()) {
+    try { document.startViewTransition(swap); return; } catch { /* cai no caminho direto */ }
+  }
+  swap();
 }
 
 // ───────────── Aviso do modo de teste (dados simulados) ─────────────
@@ -173,6 +194,7 @@ window.addEventListener('unhandledrejection', reportUnexpected);
 
 // ───────────── Inicialização ─────────────
 initStore();
+applyMotionPrefs();
 onStorageError((m) => toast(m, { error: true, timeout: 0 }));
 const notice = takeStartupNotice();
 if (notice) toast(notice, { error: true, timeout: 0 });
@@ -180,6 +202,7 @@ if (notice) toast(notice, { error: true, timeout: 0 });
 initTimer(document.getElementById('rest-timer'));
 onSyncChange(paintBadge);
 subscribe((origin) => {
+  applyMotionPrefs();
   // Modo de teste ligado/desligado: atualiza o aviso e a tela (exceto durante um treino).
   if (origin === 'demo') {
     paintDemoBanner();
@@ -191,6 +214,22 @@ subscribe((origin) => {
   if (origin === 'remote' && current?.handle.live !== false) mount();
   paintBadge(getSyncInfo());
 });
+
+// Abertura (bigorna): uma vez por sessão e só com movimento; some sozinha por CSS e ao toque.
+{
+  const splash = document.getElementById('splash');
+  let seen = false;
+  try { seen = sessionStorage.getItem('forja:splash') === '1'; sessionStorage.setItem('forja:splash', '1'); } catch { /* sem sessionStorage */ }
+  if (splash) {
+    if (seen || !motionOK()) splash.remove();
+    else {
+      const done = () => splash.remove();
+      splash.addEventListener('click', done, { once: true });
+      splash.addEventListener('animationend', (e) => { if (e.target === splash) done(); });
+      setTimeout(done, 1600); // rede de segurança
+    }
+  }
+}
 
 window.addEventListener('hashchange', mount);
 paintDemoBanner();

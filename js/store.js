@@ -207,6 +207,17 @@ export function addSession(raw) {
   return s;
 }
 
+/** Atualiza só o esforço percebido (RPE 1–10, ou null para limpar) de um treino real salvo. */
+export function updateSessionEffort(id, effort) {
+  const s = state.sessions.find((x) => x.id === id);
+  if (!s) return false; // treinos de teste (demo) não ficam em `state`
+  const v = Number.isInteger(effort) && effort >= 1 && effort <= 10 ? effort : null;
+  if (v === null) delete s.effort; else s.effort = v;
+  s.updatedAt = now();
+  commit([rk('session', id)]);
+  return true;
+}
+
 /** Exclusão lógica (permite "Desfazer" e sincronizar a exclusão). */
 export function deleteSession(id) {
   const s = state.sessions.find((x) => x.id === id);

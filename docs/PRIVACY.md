@@ -9,3 +9,8 @@
 
 - **Modo de teste:** os dados simulados são fictícios, ficam só no aparelho em chaves próprias, não entram em backup nem na sincronização e são apagados ao desligar o modo. Uma preferência de interface (`forja:ui:v1`, ex.: dica dispensada) guarda apenas sinalizadores sem dado pessoal.
 - **Análise em Python:** `scripts/analyze.py` lê arquivos que você mesmo exportou, localmente; não faz requisições de rede.
+
+
+## 2.0
+
+O esforço percebido (RPE 1–10) é um campo opcional do treino salvo e segue as mesmas regras dos demais dados (local, no backup e na sincronização opcional). As preferências de animação ficam nas configurações. A saudação por horário usa só o relógio do aparelho; nenhum nome é guardado.

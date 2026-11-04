@@ -19,7 +19,7 @@ import {
 } from '../utils.js';
 import {
   getPlan, savePlan, getSessions, getAllExercises, getExercise, getSettings,
-  loadDraft, saveDraft, clearDraft, addSession,
+  loadDraft, saveDraft, clearDraft, addSession, updateSessionEffort,
 } from '../store.js';
 import { GROUPS, EQUIPMENT } from '../data/library.js';
 import {
@@ -27,10 +27,11 @@ import {
 } from '../suggest.js';
 import {
   sessionStats, findRecords, previousBest, mergeBest, bestOf, recordKind, fmtDuration,
+  elapsedMs, adjustedEnd, fmtElapsed,
 } from '../summary.js';
 import { startRest, stopRest } from '../timer.js';
 import { pageHead, modal, confirmDialog, toast, banner, rankBadge } from '../ui.js';
-import { haptic, announce, pulse, motionOK, growBar, setAmbientRank } from '../feedback.js';
+import { haptic, announce, pulse, motionOK, motionLevel, growBar, setAmbientRank } from '../feedback.js';
 import { gradeExercise, rankSession } from '../rank.js';
 
 const RECORD_TEXT = {
@@ -53,6 +54,7 @@ function buildItem(exerciseId, planned, planItemId, planNote = '') {
     equipment: ex?.equipment ?? 'outro',
     planned: { sets: planned.sets, repMin: planned.repMin, repMax: planned.repMax },
     planNote,
+    swapNote: '',
     note: '',
     skipped: false,
     doneAt: 0,
@@ -67,6 +69,8 @@ function createDraft(day) {
     title: day.title,
     date: isoDate(),
     startedAt: Date.now(),
+    pausedMs: 0,
+    pausedAt: 0,
     note: '',
     items: day.items.map((it) => buildItem(it.exerciseId, it, it.id, it.note)),
   };
@@ -163,6 +167,21 @@ export function render({ params, navigate, rerender }) {
     progressBar.setAttribute('aria-valuemax', String(total));
     progressBar.setAttribute('aria-valuenow', String(done));
     progressFill.style.setProperty('--pct', `${total ? (done / total) * 100 : 0}%`);
+    paintNow();
+  }
+
+  /** "Série 3 de 4 · Supino" + dica do próximo exercício (informativo; nada depende disso). */
+  function paintNow() {
+    const cur = currentItem();
+    if (!cur) {
+      nowText.textContent = totals().total ? 'Tudo concluído' : 'Sem séries';
+      nextText.textContent = '';
+      return;
+    }
+    const idx = cur.sets.findIndex((x) => !x.done);
+    nowText.textContent = `Série ${idx + 1} de ${cur.sets.length} · ${cur.name}`;
+    const after = draft.items.slice(draft.items.indexOf(cur) + 1).find((i) => !i.skipped && !i.sets.every((x) => x.done));
+    nextText.textContent = after && idx === cur.sets.length - 1 ? `Depois: ${after.name}` : '';
   }
 
   const currentItem = () => draft.items.find((i) => !i.skipped && !i.sets.every((s) => s.done));
@@ -180,8 +199,35 @@ export function render({ params, navigate, rerender }) {
         r.row.classList.toggle('is-next', i === nextIdx);
         if (it && !it.sets[i]?.done) refreshPlaceholders(it, i, r);
       });
-      ref.card?.classList.toggle('finished-card', Boolean(it) && !it.skipped && it.sets.length > 0 && it.sets.every((s) => s.done));
+      const fin = Boolean(it) && !it.skipped && it.sets.length > 0 && it.sets.every((s) => s.done);
+      ref.card?.classList.toggle('finished-card', fin);
+      syncCollapse(ref, fin);
     }
+  }
+
+  /** Cards concluídos podem ser recolhidos (só a cabeçalho fica); o estado é só visual. */
+  function syncCollapse(ref, fin) {
+    const head = ref.head;
+    if (!head || !ref.card) return;
+    let btn = head.querySelector('.collapse-btn');
+    if (!fin) { btn?.remove(); ref.card.classList.remove('collapsed'); ref.collapsed = false; return; }
+    if (!btn) {
+      btn = h('button', {
+        type: 'button', class: 'collapse-btn', 'aria-expanded': 'true',
+        'aria-label': 'Recolher exercício concluído',
+        onClick: () => setCollapsed(ref, !ref.collapsed),
+      }, icon('chevron'));
+      head.append(btn);
+      if (ref.autoCollapse !== false && !ref.touched) setCollapsed(ref, true, true);
+    }
+  }
+  function setCollapsed(ref, value, auto = false) {
+    ref.collapsed = value;
+    if (!auto) ref.touched = true;
+    ref.card.classList.toggle('collapsed', value);
+    const btn = ref.head.querySelector('.collapse-btn');
+    btn?.setAttribute('aria-expanded', String(!value));
+    btn?.setAttribute('aria-label', value ? 'Expandir exercício concluído' : 'Recolher exercício concluído');
   }
 
   function refreshPlaceholders(item, i, r) {
@@ -213,6 +259,7 @@ export function render({ params, navigate, rerender }) {
     }
 
     card.append(...[head,
+      item.swapNote ? h('p', { class: 'swap-tag' }, icon('swap'), item.swapNote) : null,
       h('p', {},
         h('span', { class: 'target' }, `${item.planned.sets} × ${item.planned.repMin}–${item.planned.repMax}`),
         h('span', { class: 'muted' }, ` · ${EQUIPMENT[item.equipment] ?? ''}${item.type === 'composto' ? ' · composto' : ''}`)),
@@ -380,6 +427,8 @@ export function render({ params, navigate, rerender }) {
       haptic('done');
       pulse(btn, 'pop');
       pulse(row, 'logged');
+      pulse(ref.card, 'glow');
+      if (paused()) togglePause(); // registrar uma série retoma o tempo
       let message = `Série ${i + 1} registrada: ${fmtNum(weight)} quilos, ${reps} repetições.`;
 
       const rec = liveRecord(item, s);
@@ -396,9 +445,11 @@ export function render({ params, navigate, rerender }) {
         toast('Todas as séries concluídas. Toque em "Finalizar treino".');
         message += ' Todas as séries do treino foram concluídas.';
       } else {
-        const secs = item.type === 'composto' ? getSettings().restCompound : getSettings().restIsolation;
-        startRest(secs, 'Descanso');
-        message += ` Descanso de ${fmtClock(secs)} iniciado.`;
+        if (getSettings().autoRest) {
+          const secs = item.type === 'composto' ? getSettings().restCompound : getSettings().restIsolation;
+          startRest(secs, 'Descanso');
+          message += ` Descanso de ${fmtClock(secs)} iniciado.`;
+        }
       }
       persist(); updateProgress(); markCurrent();
       if (exerciseDone) {
@@ -465,9 +516,11 @@ export function render({ params, navigate, rerender }) {
         sets: Array.from({ length: pending }, () => ({ weight: '', reps: '', done: false })),
       };
       item.sets = doneSets;
+      item.swapNote = `Trocado por ${ex.name} no meio do treino`;
       item.planItemId = ''; // o vínculo com a ficha passa para o substituto
       draft.items.splice(draft.items.indexOf(item) + 1, 0, target);
     }
+    target.swapNote = `Substitui ${item.name}`;
     target.exerciseId = ex.id; target.name = ex.name; target.group = ex.group; target.type = ex.type;
     target.portion = ex.portion; target.equipment = ex.equipment; target.planNote = '';
     target.sets.forEach((s) => { s.weight = ''; s.reps = ''; });
@@ -583,6 +636,26 @@ export function render({ params, navigate, rerender }) {
     navigate('/');
   }
 
+  /**
+   * Partículas de luz (S e SSS; um toque discreto no A). São <span> decorativos com animação CSS,
+   * removidos ao terminar; tocar no resumo os pula. Nada aqui bloqueia o salvamento (já feito).
+   */
+  function burst(host, rank) {
+    const n = (rank === 'A' ? 6 : rank === 'S' ? 14 : 22) * (motionLevel() === 'intense' ? 1.5 : 1);
+    const layer = h('div', { class: 'particles', 'aria-hidden': 'true' });
+    for (let k = 0; k < n; k++) {
+      const a = (Math.PI * 2 * k) / n + Math.random() * 0.4;
+      const d = 60 + Math.random() * 90;
+      layer.append(h('span', { class: 'particle', style: {
+        '--dx': `${Math.round(Math.cos(a) * d)}px`, '--dy': `${Math.round(Math.sin(a) * d - 30)}px`,
+        '--delay': `${Math.round(Math.random() * 180)}ms`, '--size': `${3 + Math.round(Math.random() * 4)}px`,
+      } }));
+    }
+    host.prepend(layer);
+    setTimeout(() => layer.remove(), 1600);
+    host.closest('dialog')?.addEventListener('click', () => { layer.remove(); host.classList.add('fx-skip'); }, { once: true });
+  }
+
   /** Tela de conclusão: duração, volume, exercícios e recordes. */
   function showSummary(session) {
     const stats = sessionStats(session);
@@ -597,21 +670,53 @@ export function render({ params, navigate, rerender }) {
     const go = (path) => { if (!left) { left = true; navigate(path); } };
 
     const stat = (value, label) => h('div', { class: 'stat' }, h('div', { class: 'v' }, value), h('div', { class: 'k' }, label));
-    const body = h('div', { class: 'stack' },
-      h('div', { class: 'summary-hero' },
+
+    // Comparação de volume com o treino anterior do mesmo dia (barras desenhadas progressivamente).
+    let compare = null;
+    if (before && beforeVolume > 0) {
+      const max = Math.max(stats.volume, beforeVolume);
+      const barNow = h('span'); const barPrev = h('span');
+      compare = h('div', { class: 'compare', role: 'group', 'aria-label': `Volume: hoje ${fmtNum(stats.volume, 0)} quilos, anterior ${fmtNum(beforeVolume, 0)} quilos` },
+        h('div', { class: 'cmp-row' }, h('span', { class: 'cmp-k' }, 'Anterior'), h('div', { class: 'cmp-bar prev' }, barPrev), h('span', { class: 'cmp-v' }, `${fmtNum(beforeVolume, 0)} kg`)),
+        h('div', { class: 'cmp-row' }, h('span', { class: 'cmp-k' }, 'Hoje'), h('div', { class: 'cmp-bar now' }, barNow), h('span', { class: 'cmp-v' }, `${fmtNum(stats.volume, 0)} kg`)));
+      setTimeout(() => { growBar(barPrev, (beforeVolume / max) * 100); growBar(barNow, (stats.volume / max) * 100); }, 0);
+    }
+
+    // Esforço percebido (RPE 1–10): opcional, salvo à parte e nunca bloqueia nada.
+    const rpeNote = h('span', { class: 'hint', role: 'status' }, '');
+    const rpeGroup = h('div', { class: 'rpe', role: 'radiogroup', 'aria-label': 'Esforço percebido de 1 a 10' });
+    let rpe = 0;
+    for (let n = 1; n <= 10; n++) {
+      rpeGroup.append(h('button', {
+        type: 'button', class: 'rpe-btn', role: 'radio', 'aria-checked': 'false', 'aria-label': `Esforço ${n}`,
+        onClick: () => {
+          rpe = rpe === n ? 0 : n; // tocar de novo limpa
+          updateSessionEffort(session.id, rpe || null);
+          [...rpeGroup.children].forEach((b, i) => b.setAttribute('aria-checked', String(i + 1 === rpe)));
+          rpeNote.textContent = rpe ? `Esforço ${rpe}/10 salvo.` : 'Esforço removido.';
+          haptic('tap');
+        },
+      }, String(n)));
+    }
+
+    const fxOn = getSettings().rankEffects && motionOK() && overall;
+    const nStyle = (i) => ({ '--i': String(i) });
+    const body = h('div', { class: `stack summary-fx${fxOn ? ` fx-${overall.rank}` : ''}`, dataset: overall ? { rank: overall.rank } : {} },
+      h('div', { class: 'summary-hero', style: nStyle(0) },
         overall
           ? h('div', { class: 'rank-hero' }, h('span', { class: 'kicker' }, 'Rank do treino'), rankBadge(overall.rank, { large: true }))
           : h('span', { class: 'badge-ring', 'aria-hidden': 'true' }, icon('check')),
         h('p', { class: 'muted' }, `${session.title} · ${fmtDateShort(session.date)}`)),
-      h('div', { class: 'summary-grid' },
+      h('div', { class: 'summary-grid', style: nStyle(1) },
         stat(fmtDuration(stats.minutes), 'duração'),
         stat(`${fmtNum(stats.volume, 0)} kg`, 'volume total'),
         stat(String(stats.sets), 'séries'),
         stat(String(stats.exercises), 'exercícios')),
-      diff === null ? null : h('p', { class: 'muted small' },
+      diff === null ? null : h('p', { class: 'muted small', style: nStyle(2) },
         `Volume ${diff >= 0 ? '▲ +' : '▼ −'}${fmtNum(Math.abs(diff), 1)}% em relação ao treino anterior (${fmtDateShort(before.date)}).`),
+      compare,
       ranks.items.length
-        ? h('div', { class: 'stack' },
+        ? h('div', { class: 'stack', style: nStyle(3) },
           h('h3', {}, 'Nota por exercício'),
           h('ul', { class: 'rank-list' }, ranks.items.map((x) => h('li', {},
             rankBadge(x.grade.rank),
@@ -625,7 +730,10 @@ export function render({ params, navigate, rerender }) {
             icon('trophy'),
             h('span', {}, h('strong', {}, rc.name),
               h('small', {}, `${RECORD_TEXT[rc.kind]}: ${fmtNum(rc.value)} ${rc.kind === 'reps' ? 'reps' : 'kg'} (antes: ${fmtNum(rc.previous)})`))))))
-        : h('p', { class: 'hint' }, 'Sem recordes desta vez — consistência também é progresso.'));
+        : h('p', { class: 'hint' }, 'Sem recordes desta vez — consistência também é progresso.'),
+      h('div', { class: 'stack', style: nStyle(4) },
+        h('h3', {}, 'Como foi o esforço? ', h('span', { class: 'muted small' }, '(opcional)')),
+        rpeGroup, rpeNote));
 
     setAmbientRank(overall?.rank ?? null);
     haptic(records.length ? 'record' : 'finish');
@@ -639,6 +747,7 @@ export function render({ params, navigate, rerender }) {
       ],
       onClose: () => go(`/historico/${session.id}`), // Esc / toque fora: segue para o treino salvo
     });
+    if (fxOn && ['A', 'S', 'SSS'].includes(overall.rank)) burst(body, overall.rank);
   }
 
   async function finish() {
@@ -669,7 +778,7 @@ export function render({ params, navigate, rerender }) {
     finishing = true;
     const session = addSession({
       date: draft.date, dayId: draft.dayId, title: draft.title,
-      startedAt: draft.startedAt, endedAt: Date.now(), note: draft.note, items,
+      startedAt: draft.startedAt, endedAt: adjustedEnd(draft), note: draft.note, items,
     });
     closed = true;
     persist.cancel(); clearDraft(); stopRest();
@@ -678,10 +787,33 @@ export function render({ params, navigate, rerender }) {
 
   // ───── Montagem ─────
   const list = h('div', { class: 'stack' });
+  const nowText = h('strong', { class: 'now-text' });
+  const nextText = h('span', { class: 'muted small' });
+  const clockText = h('span', { class: 'elapsed', role: 'timer', 'aria-label': 'Tempo de treino' }, '0:00');
+  const pauseBtn = h('button', { type: 'button', class: 'btn small ghost icon-only', 'aria-pressed': 'false', 'aria-label': 'Pausar treino', onClick: () => togglePause() }, icon('pause'));
+  function paused() { return Boolean(draft.pausedAt); }
+  function paintClock() {
+    clockText.textContent = fmtElapsed(elapsedMs(draft));
+  }
+  function togglePause() {
+    if (paused()) { draft.pausedMs = (draft.pausedMs ?? 0) + (Date.now() - draft.pausedAt); draft.pausedAt = 0; } else draft.pausedAt = Date.now();
+    persist();
+    root.classList.toggle('is-paused', paused());
+    pauseBtn.setAttribute('aria-pressed', String(paused()));
+    pauseBtn.replaceChildren(icon(paused() ? 'play' : 'pause'));
+    pauseBtn.setAttribute('aria-label', paused() ? 'Retomar treino' : 'Pausar treino');
+    paintClock();
+    announce(paused() ? 'Treino pausado. O tempo não está sendo contado.' : 'Treino retomado.');
+    haptic('tap');
+  }
+  const clockTimer = setInterval(() => { if (!document.hidden) paintClock(); }, 1000);
   const finishBtn = h('button', { type: 'button', class: 'btn primary block cta', onClick: finish }, icon('check'), 'Finalizar treino');
   const root = h('div', { class: 'view workout' },
     pageHead(day.title, { subtitle: `${day.name} · rascunho salvo automaticamente`, back: '#/' }),
-    h('div', { class: 'stack' },
+    h('div', { class: 'stack workout-bar' },
+      h('div', { class: 'row between' },
+        h('div', { class: 'now' }, nowText, nextText),
+        h('div', { class: 'row' }, clockText, pauseBtn)),
       h('div', { class: 'row between' },
         progressText,
         h('button', {
@@ -703,6 +835,9 @@ export function render({ params, navigate, rerender }) {
 
   paintAll();
   updateProgress();
+  root.classList.toggle('is-paused', paused());
+  if (paused()) { pauseBtn.setAttribute('aria-pressed', 'true'); pauseBtn.setAttribute('aria-label', 'Retomar treino'); pauseBtn.replaceChildren(icon('play')); }
+  paintClock();
   { // barra cresce de 0 até o progresso salvo (rascunho retomado)
     const { total, done } = totals();
     growBar(progressFill, total ? (done / total) * 100 : 0);
@@ -729,6 +864,7 @@ export function render({ params, navigate, rerender }) {
     title: day.title,
     live: false, // não redesenhar por mudanças remotas durante o treino
     destroy() {
+      clearInterval(clockTimer);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', persist.flush);
       persist.flush();

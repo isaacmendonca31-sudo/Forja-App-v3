@@ -20,7 +20,7 @@ import {
 import { APP_VERSION } from '../version.js';
 import { convertLegacySnapshot, isLegacyBackup } from '../legacy.js';
 import { pageHead, modal, confirmDialog, toast, field, banner } from '../ui.js';
-import { haptic } from '../feedback.js';
+import { haptic, applyMotionPrefs } from '../feedback.js';
 
 const STATUS_TEXT = {
   idle: 'Sincronizado', syncing: 'Sincronizando…', offline: 'Offline — será sincronizado ao reconectar',
@@ -66,16 +66,35 @@ export function render({ rerender }) {
     });
     return field({ label, id, control: input, hint: 'Entre 15 e 900 segundos.' });
   };
-  const toggle = (label, key, hint) => h('label', { class: 'check' },
-    h('input', { type: 'checkbox', checked: s[key], onChange: (e) => updateSettings({ [key]: e.target.checked }) }),
-    h('span', {}, label, hint ? h('span', { class: 'hint' }, ' ', hint) : null));
+  const toggle = (label, key, hint) => h('label', { class: 'switch' },
+    h('input', { type: 'checkbox', role: 'switch', checked: s[key], onChange: (e) => { updateSettings({ [key]: e.target.checked }); applyMotionPrefs(); } }),
+    h('span', { class: 'track', 'aria-hidden': 'true' }, h('span', { class: 'knob' })),
+    h('span', { class: 'switch-text' }, label, hint ? h('span', { class: 'hint' }, hint) : null));
+
+  const MOTION = [['reduced', 'Reduzida'], ['normal', 'Normal'], ['intense', 'Intensa']];
+  const motionGroup = h('div', { class: 'chips', role: 'radiogroup', 'aria-label': 'Intensidade das animações' },
+    ...MOTION.map(([v, label]) => h('button', {
+      type: 'button', class: 'chip', role: 'radio', 'aria-checked': String(s.motion === v),
+      onClick: (e) => {
+        updateSettings({ motion: v });
+        applyMotionPrefs();
+        motionGroup.querySelectorAll('.chip').forEach((b) => b.setAttribute('aria-checked', String(b === e.currentTarget)));
+        haptic('tap');
+      },
+    }, label)));
 
   root.append(h('section', { class: 'card', 'aria-labelledby': 'sec-pref' },
     h('h2', { id: 'sec-pref' }, 'Treino'),
     secInput('rest-comp', 'Descanso em exercícios compostos (s)', 'restCompound'),
     secInput('rest-iso', 'Descanso em isoladores (s)', 'restIsolation'),
-    toggle('Manter a tela ligada durante o treino', 'keepAwake'),
-    toggle('Vibrar ao fim do descanso', 'vibrate'),
+    toggle('Iniciar descanso ao concluir a série', 'autoRest', 'O cronômetro começa sozinho.'),
+    toggle('Manter a tela ligada durante o treino', 'keepAwake')),
+  h('section', { class: 'card', 'aria-labelledby': 'sec-fx' },
+    h('h2', { id: 'sec-fx' }, 'Animações e feedback'),
+    h('p', { class: 'hint' }, 'Se o seu aparelho pede “reduzir movimento”, isso sempre vale, qualquer que seja a escolha abaixo.'),
+    motionGroup,
+    toggle('Efeitos de rank no resumo do treino', 'rankEffects', 'Brilhos e partículas ao concluir.'),
+    toggle('Vibrar (descanso, séries e recordes)', 'vibrate'),
     toggle('Tocar bipe ao fim do descanso', 'sound')));
 
   // ───────────── Equipamentos ─────────────

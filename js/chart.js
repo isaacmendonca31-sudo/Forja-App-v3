@@ -66,9 +66,49 @@ export function lineChart(points, { ariaLabel, unit = '' } = {}) {
   // Pontos (com <title> = dica ao passar o dedo/mouse)
   const bestIdx = points.length > 2 ? vals.indexOf(Math.max(...vals)) : -1; // destaca o melhor ponto (recorde)
   points.forEach((p, i) => {
-    svg.append(svgEl('circle', {
+    const dot = svgEl('circle', {
       class: `dot${i === points.length - 1 ? ' last' : ''}${i === bestIdx ? ' best' : ''}`, cx: x(i), cy: y(p.value), r: 4,
-    }, svgEl('title', {}, `${p.label}: ${fmtNum(p.value)}${unit ? ` ${unit}` : ''}${i === bestIdx ? ' (melhor marca)' : ''}`)));
+    }, svgEl('title', {}, `${p.label}: ${fmtNum(p.value)}${unit ? ` ${unit}` : ''}${i === bestIdx ? ' (melhor marca)' : ''}`));
+    dot.style.setProperty('--i', String(Math.min(i, 20))); // CSSOM (a CSP proíbe style inline)
+    svg.append(dot);
   });
+
+  // Dica interativa: toque/mouse/foco num ponto mostra data e valor dentro do próprio gráfico.
+  const tip = svgEl('g', { class: 'tip', 'aria-hidden': 'true' });
+  const tipBg = svgEl('rect', { class: 'tip-bg', rx: 6, ry: 6, height: 22 });
+  const tipTx = svgEl('text', { class: 'tip-tx', 'text-anchor': 'middle' });
+  const guide = svgEl('line', { class: 'tip-guide', y1: M.t, y2: M.t + innerH });
+  tip.append(guide, tipBg, tipTx);
+  svg.append(tip);
+  const dots = [...svg.querySelectorAll('.dot')];
+  let active = -1;
+  const show = (i) => {
+    if (i === active) return;
+    active = i;
+    const p = points[i];
+    const text = `${p.label} · ${fmtNum(p.value)}${unit ? ` ${unit}` : ''}`;
+    tipTx.textContent = text;
+    const w = Math.max(60, text.length * 6.2 + 14);
+    const cx = Math.min(W - M.r - w / 2, Math.max(M.l + w / 2, x(i)));
+    const ty = Math.max(2, y(p.value) - 34);
+    tipBg.setAttribute('x', String(cx - w / 2)); tipBg.setAttribute('y', String(ty)); tipBg.setAttribute('width', String(w));
+    tipTx.setAttribute('x', String(cx)); tipTx.setAttribute('y', String(ty + 15));
+    guide.setAttribute('x1', String(x(i))); guide.setAttribute('x2', String(x(i)));
+    tip.classList.add('on');
+    dots.forEach((d, k) => d.classList.toggle('active', k === i));
+  };
+  const hide = () => { active = -1; tip.classList.remove('on'); dots.forEach((d) => d.classList.remove('active')); };
+  points.forEach((p, i) => {
+    const hit = svgEl('circle', {
+      class: 'hit', cx: x(i), cy: y(p.value), r: 14, tabindex: 0, role: 'img',
+      'aria-label': `${p.label}: ${fmtNum(p.value)}${unit ? ` ${unit}` : ''}`,
+    });
+    hit.addEventListener('pointerenter', () => show(i));
+    hit.addEventListener('pointerdown', () => show(i));
+    hit.addEventListener('focus', () => show(i));
+    hit.addEventListener('blur', hide);
+    svg.append(hit);
+  });
+  svg.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') hide(); });
   return svg;
 }

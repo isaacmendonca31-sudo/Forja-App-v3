@@ -93,3 +93,8 @@ Altere `VERSION` em `sw.js` e `js/version.js`; `node scripts/check-precache.mjs`
 ## Pontos a confirmar com você
 - Os asteriscos em *Leg press 45°\** e *Cadeira extensora\** da ficha não tinham legenda; foram mantidos como observação "Marcado com * na ficha original" (editável).
 - Sincronização foi escrita contra a API do Supabase mas **não testada contra um projeto real** (sem credenciais aqui). Teste com uma conta antes de confiar nela; faça backup antes.
+
+
+## Novidades da 2.0
+
+Treino com cabeçalho compacto, pausa e cards recolhíveis; timer de descanso circular com presets; resumo com efeitos por rank e esforço percebido (RPE) opcional; tooltip nos gráficos; navegação com indicador e rolagem preservada; abertura com bigorna; preferências de animação em Ajustes. Detalhes, itens adiados e motivos em [`docs/FORJA-2.0.md`](docs/FORJA-2.0.md).

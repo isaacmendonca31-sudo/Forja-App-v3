@@ -89,3 +89,27 @@ export function fmtDuration(minutes) {
   if (minutes < 60) return `${minutes} min`;
   return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`;
 }
+
+/**
+ * Tempo ativo de um treino em andamento (descontadas as pausas), em ms.
+ * `d` = { startedAt, pausedMs?, pausedAt? }; pausedAt != 0 → está pausado desde esse instante.
+ */
+export function elapsedMs(d, now = Date.now()) {
+  const paused = (d.pausedMs ?? 0) + (d.pausedAt ? Math.max(0, now - d.pausedAt) : 0);
+  return Math.max(0, now - (d.startedAt ?? now) - paused);
+}
+
+/** Instante de término ajustado: a duração salva (fim − início) exclui o tempo em pausa. */
+export function adjustedEnd(d, now = Date.now()) {
+  return (d.startedAt ?? now) + elapsedMs(d, now);
+}
+
+/** "m:ss" ou "h:mm:ss" para um cronômetro corrido. */
+export function fmtElapsed(ms) {
+  const t = Math.floor(ms / 1000);
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const s = t % 60;
+  const p = (n) => String(n).padStart(2, '0');
+  return h ? `${h}:${p(m)}:${p(s)}` : `${m}:${p(s)}`;
+}
