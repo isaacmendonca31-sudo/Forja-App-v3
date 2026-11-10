@@ -199,18 +199,22 @@ export function render({ rerender }) {
   }
 
   // ───── 4. Outros treinos ─────
-  root.append(h('div', { class: 'section-title' }, h('h2', {}, 'Divisão semanal')));
-  const list = h('ul', { class: 'list' });
+  root.append(h('div', { class: 'section-title' }, h('h2', {}, 'Divisão semanal'), h('span', { class: 'muted small' }, 'deslize →')));
+  const rail = h('ul', { class: 'rail', role: 'list', 'aria-label': 'Treinos da divisão semanal' });
   for (const d of plan.days) {
     const last = sessions.find((s) => s.dayId === d.id);
-    list.append(h('li', {},
-      h('a', { class: 'list-item', href: `#/treino/${d.id}` },
-        h('span', { class: `day-badge${d.weekday === dow ? ' today' : ''}`, 'aria-hidden': 'true' }, d.name.slice(0, 3)),
-        h('span', { class: 'grow' },
-          h('span', { class: 'title' }, `${d.name} — ${d.title}`), h('br'),
-          h('span', { class: 'meta' }, `${d.items.length} exercícios · ${last ? `último: ${fmtDateShort(last.date)}` : 'ainda não registrado'}`)))));
+    const lastR = last ? rankSession(last, sessions, (id) => getExercise(id)?.type === 'composto').overall : null;
+    rail.append(h('li', {},
+      h('a', { class: `tile${d.weekday === dow ? ' today' : ''}`, href: `#/treino/${d.id}`,
+        'aria-label': `${d.name}, ${d.title}. ${d.items.length} exercícios. ${last ? `Último: ${fmtDateShort(last.date)}` : 'Ainda não registrado'}` },
+        h('span', { class: 'tile-letter', 'aria-hidden': 'true' }, d.name.slice(0, 1)),
+        h('span', { class: 'tile-top' },
+          h('span', { class: 'kicker' }, d.name),
+          lastR ? rankBadge(lastR.rank) : null),
+        h('strong', { class: 'tile-title' }, d.title),
+        h('span', { class: 'tile-meta' }, `${d.items.length} exercícios · ${last ? fmtDateShort(last.date) : 'novo'}`))));
   }
-  root.append(list);
+  root.append(rail);
 
   root.append(h('a', { class: 'btn', href: `#/ficha/${(todayDay ?? plan.days[0]).id}` }, icon('edit'), 'Editar ficha'));
 

@@ -95,6 +95,10 @@ Altere `VERSION` em `sw.js` e `js/version.js`; `node scripts/check-precache.mjs`
 - Sincronização foi escrita contra a API do Supabase mas **não testada contra um projeto real** (sem credenciais aqui). Teste com uma conta antes de confiar nela; faça backup antes.
 
 
+## Novidades da 3.0
+
+Fundo em gradiente WebGL próprio (reage ao rank), navegação flutuante, hero luminoso e trilho horizontal de treinos. Ver [`docs/DESIGN-3.0.md`](docs/DESIGN-3.0.md).
+
 ## Novidades da 2.0
 
 Treino com cabeçalho compacto, pausa e cards recolhíveis; timer de descanso circular com presets; resumo com efeitos por rank e esforço percebido (RPE) opcional; tooltip nos gráficos; navegação com indicador e rolagem preservada; abertura com bigorna; preferências de animação em Ajustes. Detalhes, itens adiados e motivos em [`docs/FORJA-2.0.md`](docs/FORJA-2.0.md).

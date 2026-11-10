@@ -11,6 +11,7 @@ import { initTimer } from './timer.js';
 import { startAutoSync, onSyncChange, getSyncInfo } from './sync.js';
 import { toast } from './ui.js';
 import { h } from './utils.js';
+import { initGradient } from './gradient.js';
 import { announce, setAmbientRank, applyMotionPrefs, motionOK } from './feedback.js';
 import { isId } from './validate.js';
 import { initInstall, installApp, getInstallState, onInstallStateChange } from './install.js';
@@ -195,6 +196,7 @@ window.addEventListener('unhandledrejection', reportUnexpected);
 // ───────────── Inicialização ─────────────
 initStore();
 applyMotionPrefs();
+initGradient(document.querySelector('.ambient'));
 onStorageError((m) => toast(m, { error: true, timeout: 0 }));
 const notice = takeStartupNotice();
 if (notice) toast(notice, { error: true, timeout: 0 });

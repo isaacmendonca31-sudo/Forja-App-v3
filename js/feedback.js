@@ -33,6 +33,7 @@ export function applyMotionPrefs() {
   const low = (mem && mem <= 2) || (cores && cores <= 2);
   if (low) body.dataset.perf = 'low'; else delete body.dataset.perf;
   body.classList.toggle('tab-hidden', document.hidden);
+  document.dispatchEvent(new Event('forja:motion')); // o fundo em WebGL reage (pausa/retoma)
 }
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => document.body.classList.toggle('tab-hidden', document.hidden));
@@ -89,4 +90,5 @@ export function growBar(fill, pct) {
  */
 export function setAmbientRank(rank) {
   if (rank) document.body.dataset.rank = rank; else delete document.body.dataset.rank;
+  document.dispatchEvent(new Event('forja:rank'));
 }
