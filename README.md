@@ -1,4 +1,4 @@
-﻿# FORJA
+# FORJA
 
 FORJA é um aplicativo web progressivo (PWA) para registrar, acompanhar e evoluir treinos de musculação com foco em hipertrofia. O projeto foi pensado para funcionar offline, ser instalado como app no celular e manter o controle do histórico, progresso e desempenho de forma simples e direta.
 
@@ -103,7 +103,6 @@ npm run test:py
 
 ## Estrutura do projeto
 
-<<<<<<< HEAD
 ```text
 .
 ├── index.html
@@ -223,6 +222,3 @@ FORJA foi pensado como uma ferramenta prática, leve e útil para acompanhamento
 ---
 
 Desenvolvido para apoiar o acompanhamento de treinos, volume, consistência e progresso ao longo do tempo.
-=======
-Treino com cabeçalho compacto, pausa e cards recolhíveis; timer de descanso circular com presets; resumo com efeitos por rank e esforço percebido (RPE) opcional; tooltip nos gráficos; navegação com indicador e rolagem preservada; abertura com bigorna; preferências de animação e quatro temas de cor com ícones próprios em Ajustes. Detalhes, itens adiados e motivos em [`docs/FORJA-2.0.md`](docs/FORJA-2.0.md).
->>>>>>> a947630b45d00403708bad2c6020f09aba891c2a
