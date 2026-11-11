@@ -5,7 +5,7 @@
  * sem precisar de configuração de servidor.
  */
 import {
-  initStore, subscribe, takeStartupNotice, onStorageError, loadDraft, isDemoMode, getDemoInfo,
+  initStore, subscribe, takeStartupNotice, onStorageError, loadDraft, isDemoMode, getDemoInfo, getSettings,
 } from './store.js';
 import { initTimer } from './timer.js';
 import { startAutoSync, onSyncChange, getSyncInfo } from './sync.js';
@@ -15,6 +15,7 @@ import { initGradient } from './gradient.js';
 import { announce, setAmbientRank, applyMotionPrefs, motionOK } from './feedback.js';
 import { isId } from './validate.js';
 import { initInstall, installApp, getInstallState, onInstallStateChange } from './install.js';
+import { applyTheme } from './theme.js';
 
 import * as today from './views/today.js';
 import * as workout from './views/workout.js';
@@ -195,6 +196,7 @@ window.addEventListener('unhandledrejection', reportUnexpected);
 
 // ───────────── Inicialização ─────────────
 initStore();
+applyTheme(getSettings().theme);
 applyMotionPrefs();
 initGradient(document.querySelector('.ambient'));
 onStorageError((m) => toast(m, { error: true, timeout: 0 }));
@@ -205,6 +207,7 @@ initTimer(document.getElementById('rest-timer'));
 onSyncChange(paintBadge);
 subscribe((origin) => {
   applyMotionPrefs();
+  applyTheme(getSettings().theme);
   // Modo de teste ligado/desligado: atualiza o aviso e a tela (exceto durante um treino).
   if (origin === 'demo') {
     paintDemoBanner();

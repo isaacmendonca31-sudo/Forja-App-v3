@@ -22,6 +22,14 @@ test('valores inválidos de movimento/efeitos caem no padrão', () => {
   assert.equal(sanitizeSettings({ autoRest: false }).autoRest, false);
 });
 
+test('tema aceita apenas as quatro paletas disponíveis', () => {
+  assert.equal(DEFAULT_SETTINGS.theme, 'green');
+  for (const theme of ['green', 'blue', 'purple', 'orange']) {
+    assert.equal(sanitizeSettings({ theme }).theme, theme);
+  }
+  assert.equal(sanitizeSettings({ theme: 'custom' }).theme, 'green');
+});
+
 const base = { id: 'x1', date: '2026-10-01', items: [{ exerciseId: 'e1', sets: [{ weight: 40, reps: 10 }] }] };
 test('esforço (RPE) é opcional e limitado a 1–10', () => {
   assert.equal(sanitizeSession(base).effort, undefined);

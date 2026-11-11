@@ -101,4 +101,4 @@ Fundo em gradiente WebGL próprio (reage ao rank), navegação flutuante, hero l
 
 ## Novidades da 2.0
 
-Treino com cabeçalho compacto, pausa e cards recolhíveis; timer de descanso circular com presets; resumo com efeitos por rank e esforço percebido (RPE) opcional; tooltip nos gráficos; navegação com indicador e rolagem preservada; abertura com bigorna; preferências de animação em Ajustes. Detalhes, itens adiados e motivos em [`docs/FORJA-2.0.md`](docs/FORJA-2.0.md).
+Treino com cabeçalho compacto, pausa e cards recolhíveis; timer de descanso circular com presets; resumo com efeitos por rank e esforço percebido (RPE) opcional; tooltip nos gráficos; navegação com indicador e rolagem preservada; abertura com bigorna; preferências de animação e quatro temas de cor com ícones próprios em Ajustes. Detalhes, itens adiados e motivos em [`docs/FORJA-2.0.md`](docs/FORJA-2.0.md).

@@ -12,18 +12,33 @@
  * AO PUBLICAR UMA NOVA VERSÃO: altere VERSION (e confira a lista SHELL;
  * `node scripts/check-precache.mjs` valida que todos os arquivos existem).
  */
-const VERSION = '3.0.0';
+const VERSION = '3.0.3';
 const CACHE = `forja-shell-${VERSION}`;
 
 const SHELL = [
   './',
   'index.html',
   'manifest.webmanifest',
+  'manifest-blue.webmanifest',
+  'manifest-purple.webmanifest',
+  'manifest-orange.webmanifest',
   'css/style.css',
   'icons/icon.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-maskable-512.png',
+  'icons/icon-blue.svg',
+  'icons/icon-blue-192.png',
+  'icons/icon-blue-512.png',
+  'icons/icon-blue-maskable-512.png',
+  'icons/icon-purple.svg',
+  'icons/icon-purple-192.png',
+  'icons/icon-purple-512.png',
+  'icons/icon-purple-maskable-512.png',
+  'icons/icon-orange.svg',
+  'icons/icon-orange-192.png',
+  'icons/icon-orange-512.png',
+  'icons/icon-orange-maskable-512.png',
   'js/app.js',
   'js/backup.js',
   'js/chart.js',
@@ -40,6 +55,7 @@ const SHELL = [
   'js/summary.js',
   'js/sync.js',
   'js/timer.js',
+  'js/theme.js',
   'js/ui.js',
   'js/utils.js',
   'js/validate.js',

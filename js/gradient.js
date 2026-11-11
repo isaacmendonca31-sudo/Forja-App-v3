@@ -10,9 +10,11 @@
  *  • Barato: renderiza em ~30% da resolução (o desfoque natural do shader esconde isso), 30 fps.
  *  • Respeitoso: com "reduzir movimento" desenha UM quadro estático; aba oculta pausa;
  *    aparelho modesto (data-perf=low), sem WebGL ou contexto perdido → permanece o fundo CSS.
- *  • Reage ao rank: a cor de destaque desliza para amarelo/azul/verde/roxo (SSS = arco-íris).
+ *  • Reage ao tema e ao rank: o tema colore o gradiente; ranks mantêm seus destaques (SSS = arco-íris).
  *  • Nenhum script inline: o shader é texto passado ao WebGL (não é script do documento).
  */
+import { THEMES } from './theme.js';
+
 const VERT = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
 const FRAG = `
 #ifdef GL_FRAGMENT_PRECISION_HIGH
@@ -20,7 +22,7 @@ precision highp float;
 #else
 precision mediump float;
 #endif
-uniform vec2 r; uniform float t; uniform vec3 hi; uniform float rb;
+uniform vec2 r; uniform float t; uniform vec3 hi; uniform vec3 deep; uniform float rb;
 float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
   return mix(mix(h(i),h(i+vec2(1.,0.)),f.x),mix(h(i+vec2(0.,1.)),h(i+vec2(1.,1.)),f.x),f.y);}
@@ -35,7 +37,6 @@ void main(){
   vec2 q=vec2(fbm(p+t*.045),fbm(p+vec2(5.2,1.3)-t*.037));
   float f=fbm(p+2.1*q);
   vec3 base=vec3(.031,.035,.043);                  // grafite quase preto
-  vec3 deep=vec3(.045,.13,.07);                    // verde profundo
   vec3 acc=mix(hi,hue(fract(t*.03+f*.6)),rb);      // destaque (arco-íris no SSS)
   vec3 col=mix(base,deep,smoothstep(.25,.75,f));
   col=mix(col,acc*.8,smoothstep(.5,1.0,f*f*1.7+q.x*.4)*.85);
@@ -45,8 +46,12 @@ void main(){
 }`;
 
 const RANK_COLORS = {
-  none: [0.46, 0.88, 0.44], C: [1, 0.76, 0.2], B: [0.35, 0.66, 1], A: [0.46, 0.88, 0.44], S: [0.72, 0.55, 1], SSS: [0.46, 0.88, 0.44],
+  C: [1, 0.76, 0.2], B: [0.35, 0.66, 1], S: [0.72, 0.55, 1],
 };
+
+function normalizedColor(hex) {
+  return hex.match(/[a-f\d]{2}/gi).map((channel) => Number.parseInt(channel, 16) / 255);
+}
 
 export function initGradient(host) {
   if (!host || document.body.dataset.perf === 'low') return false;
@@ -75,12 +80,20 @@ export function initGradient(host) {
   const loc = gl.getAttribLocation(prog, 'p');
   gl.enableVertexAttribArray(loc);
   gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  const U = { r: gl.getUniformLocation(prog, 'r'), t: gl.getUniformLocation(prog, 't'), hi: gl.getUniformLocation(prog, 'hi'), rb: gl.getUniformLocation(prog, 'rb') };
+  const U = {
+    r: gl.getUniformLocation(prog, 'r'),
+    t: gl.getUniformLocation(prog, 't'),
+    hi: gl.getUniformLocation(prog, 'hi'),
+    deep: gl.getUniformLocation(prog, 'deep'),
+    rb: gl.getUniformLocation(prog, 'rb'),
+  };
 
   host.prepend(canvas);
   host.classList.add('gl-on');
 
-  let color = [...RANK_COLORS.none]; let target = color; let rainbow = 0; let rbTarget = 0;
+  const themeColor = () => normalizedColor(THEMES[document.documentElement.dataset.theme]?.accent ?? THEMES.green.accent);
+  const themeDeep = () => normalizedColor(THEMES[document.documentElement.dataset.theme]?.deep ?? THEMES.green.deep);
+  let color = themeColor(); let target = color; let rainbow = 0; let rbTarget = 0;
   let time = 12; let last = 0; let raf = 0; let alive = true;
 
   const size = () => {
@@ -94,6 +107,8 @@ export function initGradient(host) {
     gl.uniform2f(U.r, canvas.width, canvas.height);
     gl.uniform1f(U.t, time);
     gl.uniform3f(U.hi, color[0], color[1], color[2]);
+    const deep = themeDeep();
+    gl.uniform3f(U.deep, deep[0], deep[1], deep[2]);
     gl.uniform1f(U.rb, rainbow);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
@@ -113,7 +128,7 @@ export function initGradient(host) {
   };
   const sync = () => {
     const rank = document.body.dataset.rank;
-    target = RANK_COLORS[rank] ?? RANK_COLORS.none;
+    target = rank === 'A' || !rank ? themeColor() : RANK_COLORS[rank] ?? themeColor();
     rbTarget = rank === 'SSS' ? 1 : 0;
     if (mode() === 'reduced' || document.hidden) {
       color = [...target]; rainbow = rbTarget; draw(); // quadro estático já na cor certa
@@ -126,6 +141,7 @@ export function initGradient(host) {
   document.addEventListener('visibilitychange', sync);
   document.addEventListener('forja:motion', sync);
   document.addEventListener('forja:rank', sync);
+  document.addEventListener('forja:theme', sync);
   canvas.addEventListener('webglcontextlost', (e) => { // volta ao fundo CSS sem quebrar nada
     e.preventDefault(); alive = false; cancelAnimationFrame(raf); canvas.remove(); host.classList.remove('gl-on');
   });
