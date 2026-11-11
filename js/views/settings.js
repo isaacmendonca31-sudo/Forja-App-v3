@@ -21,6 +21,7 @@ import { APP_VERSION } from '../version.js';
 import { convertLegacySnapshot, isLegacyBackup } from '../legacy.js';
 import { pageHead, modal, confirmDialog, toast, field, banner } from '../ui.js';
 import { haptic, applyMotionPrefs } from '../feedback.js';
+import { THEMES, applyTheme } from '../theme.js';
 
 const STATUS_TEXT = {
   idle: 'Sincronizado', syncing: 'Sincronizando…', offline: 'Offline — será sincronizado ao reconectar',
@@ -96,6 +97,25 @@ export function render({ rerender }) {
     toggle('Efeitos de rank no resumo do treino', 'rankEffects', 'Brilhos e partículas ao concluir.'),
     toggle('Vibrar (descanso, séries e recordes)', 'vibrate'),
     toggle('Tocar bipe ao fim do descanso', 'sound')));
+
+  const themeGroup = h('div', { class: 'theme-options', role: 'radiogroup', 'aria-label': 'Tema de cores' },
+    ...Object.entries(THEMES).map(([key, theme]) => h('button', {
+      type: 'button', class: 'theme-option', role: 'radio', 'aria-checked': String(s.theme === key),
+      style: { '--swatch': theme.accent },
+      onClick: (e) => {
+        updateSettings({ theme: key });
+        applyTheme(key);
+        themeGroup.querySelectorAll('.theme-option').forEach((button) => {
+          button.setAttribute('aria-checked', String(button === e.currentTarget));
+        });
+        haptic('tap');
+      },
+    }, h('span', { class: 'theme-swatch', 'aria-hidden': 'true' }), theme.label)));
+  root.append(h('section', { class: 'card', 'aria-labelledby': 'sec-theme' },
+    h('h2', { id: 'sec-theme' }, 'Aparência'),
+    h('p', { class: 'hint' }, 'Escolha a cor de destaque e do ícone do FORJA.'),
+    h('p', { class: 'hint' }, 'O ícone de apps já instalados pode levar um tempo para atualizar; no iPhone/iPad, talvez seja necessário adicionar o app à Tela de Início novamente.'),
+    themeGroup));
 
   // ───────────── Equipamentos ─────────────
   root.append(h('section', { class: 'card', 'aria-labelledby': 'sec-eq' },

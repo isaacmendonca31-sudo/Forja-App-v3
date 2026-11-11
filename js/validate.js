@@ -119,6 +119,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   vibrate: true,
   sound: false,
   motion: 'normal',     // 'reduced' | 'normal' | 'intense' (intensidade das animações)
+  theme: 'green',
   rankEffects: true,    // efeitos de celebração por rank no resumo
   autoRest: true,       // inicia o descanso sozinho ao concluir uma série
   unavailableEquipment: [],
@@ -134,6 +135,7 @@ export function sanitizeSettings(raw) {
     vibrate: typeof r.vibrate === 'boolean' ? r.vibrate : DEFAULT_SETTINGS.vibrate,
     sound: typeof r.sound === 'boolean' ? r.sound : DEFAULT_SETTINGS.sound,
     motion: ['reduced', 'normal', 'intense'].includes(r.motion) ? r.motion : DEFAULT_SETTINGS.motion,
+    theme: ['green', 'blue', 'purple', 'orange'].includes(r.theme) ? r.theme : DEFAULT_SETTINGS.theme,
     rankEffects: typeof r.rankEffects === 'boolean' ? r.rankEffects : DEFAULT_SETTINGS.rankEffects,
     autoRest: typeof r.autoRest === 'boolean' ? r.autoRest : DEFAULT_SETTINGS.autoRest,
     unavailableEquipment: [...new Set(asArray(r.unavailableEquipment).filter((k) => typeof k === 'string' && has(EQUIPMENT, k)))],
